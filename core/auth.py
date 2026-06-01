@@ -75,7 +75,7 @@ def verify_session_via_user_center(context):
     # Create a temporary page to avoid disrupting current page navigation
     page = context.new_page()
     try:
-        page.goto(user_center_url, timeout=15000)
+        page.goto(user_center_url, timeout=15000, wait_until="domcontentloaded")
         status = check_auth_status(page)
         
         if status == AUTH_DEAD:

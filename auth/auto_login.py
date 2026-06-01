@@ -45,7 +45,7 @@ def run_login():
         
         # Phase 1: Warm-up
         logger.info(f"Phase 1: Navigating to base URL: {config.BASE_URL}")
-        page.goto(config.BASE_URL)
+        page.goto(config.BASE_URL, wait_until="domcontentloaded")
         sleep_time = random.uniform(2, 5)
         logger.info(f"Sleeping for {sleep_time:.2f} seconds...")
         time.sleep(sleep_time)
@@ -60,7 +60,7 @@ def run_login():
             
         # Phase 2: Navigate to login
         logger.info(f"Phase 2: Navigating to login URL: {config.LOGIN_URL}")
-        page.goto(config.LOGIN_URL)
+        page.goto(config.LOGIN_URL, wait_until="domcontentloaded")
         time.sleep(2)
         
         # Phase 3: Fill credentials
@@ -139,7 +139,7 @@ def run_login():
         logger.info("Phase 5: Initiating Truth Test validation...")
         user_center_url = f"{config.BASE_URL}/user/Level/level_centre.html"
         try:
-            page.goto(user_center_url, timeout=15000)
+            page.goto(user_center_url, timeout=15000, wait_until="domcontentloaded")
             time.sleep(3)
             
             status = check_auth_status(page)
