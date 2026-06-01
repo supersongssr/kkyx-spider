@@ -1,0 +1,22 @@
+[project]
+name = "kkyx-spider"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "bleach>=6.3.0",
+    "httpx>=0.28.1",
+    "parsel>=1.11.0",
+    "playwright>=1.58.0",
+    "playwright-stealth>=2.0.3",
+    "python-dotenv>=1.2.2",
+    "tenacity>=9.1.4",
+    "requests>=2.31.0",
+]
+
+[tool.uv]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
