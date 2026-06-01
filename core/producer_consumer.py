@@ -164,40 +164,40 @@ class IndexProducer:
             const results = [];
             const titleBlacklist = ['查看', '更多', '详情', '点击', '下载', '进入'];
             
-            // Strategy 1: Container-based extraction (preferred)
-            const containers = document.querySelectorAll('li, .item, .game-item');
-            containers.forEach(c => {
-                const a = c.querySelector('a[href*="/qbyx/"]');
-                if (!a) return;
-                
-                const href = a.href;
-                let title = a.title || a.innerText || "";
-                title = title.trim();
+            // Strategy 1: game-card-link extraction (preferred high-precision selector)
+            const cards = document.querySelectorAll('a.game-card-link');
+            cards.forEach(a => {
+                const href = a.href || "";
+                const title = a.title || "";
                 
                 // Skip if title matches blacklist keyword
                 if (titleBlacklist.some(word => title.includes(word))) return;
                 
-                // Find date
+                // Find date inside game-meta
                 let dateStr = "";
-                const dateEl = c.querySelector('.time, .date, span, p');
-                if (dateEl) {
-                    const match = dateEl.innerText.match(/\\d{4}-\\d{2}-\\d{2}/);
+                const clockIcon = a.querySelector('.fa-clock');
+                if (clockIcon && clockIcon.parentElement) {
+                    const text = clockIcon.parentElement.innerText || "";
+                    const match = text.match(/\\d{4}-\\d{2}-\\d{2}/);
                     if (match) dateStr = match[0];
                 }
                 
                 if (href && title) {
                     results.push({
-                        title: title,
+                        title: title.trim(),
                         url: href,
                         publish_date: dateStr || new Date().toISOString().split('T')[0]
                     });
                 }
             });
             
-            // Strategy 2: Fallback to direct links if container extraction returns nothing
+            // Strategy 2: Fallback to direct links pattern filtering
             if (results.length === 0) {
                 document.querySelectorAll('a[href*="/qbyx/"]').forEach(a => {
-                    const href = a.href;
+                    const href = a.href || "";
+                    // Ensure it is a game detail page and not the category/menu link
+                    if (!href.endsWith('.html')) return;
+                    
                     let title = a.title || a.innerText || "";
                     title = title.trim();
                     if (title && !titleBlacklist.some(word => title.includes(word))) {

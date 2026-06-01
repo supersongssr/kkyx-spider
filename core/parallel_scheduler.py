@@ -2,7 +2,7 @@ import os
 from core.log_formatter import logger
 from core.db_manager import DBManager
 from core.browser_handler import BrowserHandler
-from core.auth import check_auth_status, AUTH_DEAD, verify_session_via_user_center
+from core.auth import check_auth_status, AUTH_DEAD, AUTH_UNKNOWN, verify_session_via_user_center
 from core.producer_consumer import IndexProducer, PostConsumer
 from core.wp_publisher import WPPublisher
 import config
