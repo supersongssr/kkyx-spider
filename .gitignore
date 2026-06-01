@@ -221,4 +221,5 @@ __marimo__/
 data/
 auth/state.json
 debug/
+scratch/
 
