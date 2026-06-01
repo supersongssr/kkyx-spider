@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project specific local runtime data and credentials
+data/
+auth/state.json
+debug/
+
