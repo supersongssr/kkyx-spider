@@ -50,93 +50,42 @@ def run_login():
         logger.info(f"Sleeping for {sleep_time:.2f} seconds...")
         time.sleep(sleep_time)
         
-        # Random scroll
+        # Phase 2: Open login modal
+        logger.info("Phase 2: Clicking login button to open popup modal...")
         try:
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            page.locator("#loginBtn").click()
+            time.sleep(2)
+        except Exception as e:
+            logger.error(f"Failed to click login button: {e}")
+            save_diagnostic_info(page, "modal_open_failed")
+            browser.close()
+            return False
+            
+        # Phase 3: Fill credentials in modal
+        logger.info(f"Phase 3: Filling credentials in modal for user: {config.USERNAME}")
+        try:
+            page.locator("#loginEmail").fill(config.USERNAME)
+            page.locator("#loginPassword").fill(config.PASSWORD)
             time.sleep(1)
-            page.evaluate("window.scrollTo(0, 0)")
         except Exception as e:
-            logger.warning(f"Failed warm-up scroll: {e}")
+            logger.error(f"Failed to fill login inputs in modal: {e}")
+            save_diagnostic_info(page, "modal_fill_failed")
+            browser.close()
+            return False
             
-        # Phase 2: Navigate to login
-        logger.info(f"Phase 2: Navigating to login URL: {config.LOGIN_URL}")
-        page.goto(config.LOGIN_URL, wait_until="domcontentloaded")
-        time.sleep(2)
-        
-        # Phase 3: Fill credentials
-        logger.info(f"Phase 3: Filling credentials for user: {config.USERNAME}")
-        
-        user_selectors = ["input[name='username']", "input[name='txtUser']", "#username", "#txtUser"]
-        pwd_selectors = ["input[name='password']", "input[type='password']", "#password", "#txtPassword"]
-        
-        user_filled = False
-        for selector in user_selectors:
-            try:
-                if page.locator(selector).is_visible(timeout=1000):
-                    page.locator(selector).fill(config.USERNAME)
-                    user_filled = True
-                    logger.info(f"Filled username using selector: {selector}")
-                    break
-            except Exception:
-                continue
-                
-        if not user_filled:
-            logger.info("Standard username fill failed. Falling back to JS evaluate.")
-            try:
-                page.evaluate(f"() => {{ document.querySelector('input[type=\"text\"]').value = '{config.USERNAME}'; }}")
-                user_filled = True
-            except Exception as e:
-                logger.error(f"JS username fill failed: {e}")
-            
-        pwd_filled = False
-        for selector in pwd_selectors:
-            try:
-                if page.locator(selector).is_visible(timeout=1000):
-                    page.locator(selector).fill(config.PASSWORD)
-                    pwd_filled = True
-                    logger.info(f"Filled password using selector: {selector}")
-                    break
-            except Exception:
-                continue
-                
-        if not pwd_filled:
-            logger.info("Standard password fill failed. Falling back to JS evaluate.")
-            try:
-                page.evaluate(f"() => {{ document.querySelector('input[type=\"password\"]').value = '{config.PASSWORD}'; }}")
-                pwd_filled = True
-            except Exception as e:
-                logger.error(f"JS password fill failed: {e}")
-            
-        # Phase 4: Submit credentials
-        logger.info("Phase 4: Submitting login credentials...")
-        
+        # Phase 4: Submit modal login
+        logger.info("Phase 4: Clicking modal submit button...")
         try:
-            # First attempt: standard form submission via JS Form.submit()
-            form_submitted = page.evaluate("""() => {
-                const form = document.querySelector('form[action*="login"]') || document.querySelector('form');
-                if (form) {
-                    form.submit();
-                    return true;
-                }
-                return false;
-            }""")
-            if form_submitted:
-                logger.info("Submitted login form via JS Form.submit().")
-                time.sleep(5)
-            else:
-                page.locator("button[type='submit'], input[type='submit'], .btn-login").click()
-                logger.info("Clicked login button.")
-                time.sleep(5)
+            page.locator(".login-submit-btn").click()
+            time.sleep(5)
         except Exception as e:
-            logger.warning(f"Error submitting via form submit / click: {e}. Trying direct click on login button.")
-            try:
-                page.locator("input[type='submit']").click()
-                time.sleep(5)
-            except Exception as e2:
-                logger.error(f"Fallback submit failed: {e2}")
+            logger.error(f"Failed to click modal submit button: {e}")
+            save_diagnostic_info(page, "modal_submit_failed")
+            browser.close()
+            return False
 
         # Phase 5: Truth Test
-        logger.info("Phase 5: Initiating Truth Test validation...")
+        logger.info("Phase 5: Initiating Truth Test validation at User Center...")
         user_center_url = f"{config.BASE_URL}/user/Level/level_centre.html"
         try:
             page.goto(user_center_url, timeout=15000, wait_until="domcontentloaded")
