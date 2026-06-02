@@ -105,15 +105,17 @@ def verify_session_via_user_center(context):
 def save_diagnostic_info(page, suffix):
     """Save diagnostic screenshots, HTML, and cookies as specified in plans/08-auth-system.md"""
     now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    date_str = datetime.now().strftime("%Y-%m-%d")
     
     # Create directories
-    os.makedirs("debug/screenshots", exist_ok=True)
-    os.makedirs("debug/html", exist_ok=True)
-    os.makedirs("debug/network", exist_ok=True)
+    screenshot_dir = os.path.join(".screenshots", date_str)
+    os.makedirs(screenshot_dir, exist_ok=True)
+    os.makedirs(".debug/html", exist_ok=True)
+    os.makedirs(".debug/network", exist_ok=True)
     
-    screenshot_path = f"debug/screenshots/{now_str}_{suffix}.png"
-    html_path = f"debug/html/{now_str}_{suffix}.html"
-    cookies_path = f"debug/network/{now_str}_cookies.json"
+    screenshot_path = os.path.join(screenshot_dir, f"{now_str}_{suffix}.png")
+    html_path = f".debug/html/{now_str}_{suffix}.html"
+    cookies_path = f".debug/network/{now_str}_cookies.json"
     
     try:
         page.screenshot(path=screenshot_path)

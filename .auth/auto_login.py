@@ -13,8 +13,8 @@ from core.auth import check_auth_status, AUTH_ALIVE, save_diagnostic_info
 import config
 
 def run_login():
-    os.makedirs("auth", exist_ok=True)
-    state_path = os.path.join("auth", "state.json")
+    os.makedirs(".auth", exist_ok=True)
+    state_path = os.path.join(".auth", "state.json")
     
     # Clear old state.json if present
     if os.path.exists(state_path):

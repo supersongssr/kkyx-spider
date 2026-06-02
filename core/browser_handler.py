@@ -7,7 +7,7 @@ import config
 
 class BrowserHandler:
     def __init__(self, storage_state_path=None):
-        self.storage_state_path = storage_state_path or os.path.join("auth", "state.json")
+        self.storage_state_path = storage_state_path or os.path.join(".auth", "state.json")
         self.playwright = None
         self.browser = None
         self.context = None

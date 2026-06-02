@@ -99,7 +99,7 @@ LOG_LEVEL = "DEBUG"
 # ========================================
 # Database Configuration
 # ========================================
-DB_DIR = "data/db"
+DB_DIR = ".data/db"
 DB_FILE = os.path.join(DB_DIR, "kkyx_spider.db")
 os.makedirs(DB_DIR, exist_ok=True)
 
@@ -126,7 +126,7 @@ DELAY_MAX = DELAY_DETAIL_MAX
 # ========================================
 # Paths
 # ========================================
-SCREENSHOT_DIR = "debug/screenshots"
+SCREENSHOT_DIR = ".screenshots"
 SCREENSHOT_PATH = os.path.join(SCREENSHOT_DIR, "debug_screenshot.png")
 
 # ========================================

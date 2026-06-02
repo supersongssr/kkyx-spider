@@ -15,7 +15,7 @@ class ParallelScheduler:
     def initialize_browser(self):
         """Lazy launch browser handler context to save resources."""
         if not self.bh:
-            self.bh = BrowserHandler(os.path.join("auth", "state.json"))
+            self.bh = BrowserHandler(os.path.join(".auth", "state.json"))
 
     def run_pipeline(self):
         """
