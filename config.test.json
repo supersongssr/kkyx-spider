@@ -1,0 +1,70 @@
+{
+  "target_site": {
+    "base_url": "https://www.kkyx.net",
+    "login_url": "https://www.kkyx.net/index.php?m=user&c=Users&a=login",
+    "index_scan_start_url": "https://www.kkyx.net/update/",
+    "index_scan_end_url": "https://www.kkyx.net/update/list_15_517/",
+    "update_channel_page_template": "https://www.kkyx.net/update/list_15_{page_num}/"
+  },
+  "pipeline": {
+    "post_crawl_batch_limit": 5,
+    "queue_max_size": 50,
+    "post_min_delay": 1,
+    "post_max_delay": 15,
+    "default_batch_count": 10,
+    "start_page": 1
+  },
+  "safety": {
+    "index_scan_page_limit": 2,
+    "safe_threshold": 9,
+    "max_posts_per_run": 5,
+    "max_retry_count": 3,
+    "browser_restart_interval": 10
+  },
+  "debug": {
+    "debug_mode": true,
+    "debug_limit": 3,
+    "log_level": "DEBUG"
+  },
+  "database": {
+    "db_dir": ".data/db",
+    "db_file": ".data/db/kkyx_spider.db"
+  },
+  "delays": {
+    "index_page_delay": [3, 7],
+    "index_page_long_sleep_interval": 20,
+    "index_page_long_sleep": [30, 60],
+    "soft_404_retry_wait": 60,
+    "soft_404_max_retries": 2,
+    "delay_index_min": 1,
+    "delay_index_max": 3,
+    "delay_detail_min": 10,
+    "delay_detail_max": 20
+  },
+  "paths": {
+    "screenshot_dir": ".screenshots",
+    "screenshot_path": ".screenshots/debug_screenshot.png"
+  },
+  "wordpress": {
+    "category_game": 68,
+    "category_map": {
+      "默认": 68,
+      "动作": 70,
+      "独立游戏": 75
+    },
+    "fixed_tags": ["KKYX"],
+    "tag_keywords": [
+      "RPG", "动作", "模拟", "汉化", "策略", "冒险", "射击",
+      "独立游戏", "单机游戏", "PC", "Steam", "中文"
+    ],
+    "ice_price": "5.00",
+    "media_verify_ssl": false,
+    "media_timeout": 60,
+    "sync_batch_limit": 1,
+    "sync_interval": 2,
+    "sync_min_delay": 1,
+    "sync_max_delay": 3,
+    "max_retries": 3,
+    "retry_backoff_base": 2
+  }
+}

@@ -55,13 +55,17 @@ configure_credentials() {
     current_wp_url=""
     current_wp_user=""
     current_wp_pwd=""
+    current_cdn_url="https://test-img-cdn.freessr.bid:8443/kkyx"
+    current_config_path="config.json"
     
     if [ -f ".env" ]; then
-        current_user=$(grep "^KKYX_USER=" .env | cut -d'=' -f2)
-        current_pwd=$(grep "^KKYX_PWD=" .env | cut -d'=' -f2)
-        current_wp_url=$(grep "^WP_BASE_URL=" .env | cut -d'=' -f2)
-        current_wp_user=$(grep "^WP_USERNAME=" .env | cut -d'=' -f2)
-        current_wp_pwd=$(grep "^TEST_KKYX_WP_APP_PASSWORD=" .env | cut -d'=' -f2)
+        current_user=$(grep "^KKYX_USER=" .env | cut -d'=' -f2-)
+        current_pwd=$(grep "^KKYX_PWD=" .env | cut -d'=' -f2-)
+        current_wp_url=$(grep "^WP_BASE_URL=" .env | cut -d'=' -f2-)
+        current_wp_user=$(grep "^WP_USERNAME=" .env | cut -d'=' -f2-)
+        current_wp_pwd=$(grep "^TEST_KKYX_WP_APP_PASSWORD=" .env | cut -d'=' -f2-)
+        current_cdn_url=$(grep "^CDN_BASE_URL=" .env | cut -d'=' -f2- || echo "https://test-img-cdn.freessr.bid:8443/kkyx")
+        current_config_path=$(grep "^CONFIG_PATH=" .env | cut -d'=' -f2- || echo "config.json")
     fi
 
     echo -e "${YELLOW}直接按回车将保留当前值。${NC}"
@@ -82,6 +86,12 @@ configure_credentials() {
     read -s -p "请输入 WordPress 应用密码 [$current_wp_pwd]: " new_wp_pwd
     new_wp_pwd=${new_wp_pwd:-$current_wp_pwd}
     echo "" # newline after silent read
+
+    read -p "请输入 CDN 资源根网址 [$current_cdn_url]: " new_cdn_url
+    new_cdn_url=${new_cdn_url:-$current_cdn_url}
+
+    read -p "请输入复杂配置文件路径 (JSON) [$current_config_path]: " new_config_path
+    new_config_path=${new_config_path:-$current_config_path}
     
     # Write to .env
     cat <<EOF > .env
@@ -97,6 +107,16 @@ KKYX_PWD=$new_pwd
 WP_BASE_URL=$new_wp_url
 WP_USERNAME=$new_wp_user
 TEST_KKYX_WP_APP_PASSWORD=$new_wp_pwd
+
+# ========================================
+# CDN Configuration (Optional)
+# ========================================
+CDN_BASE_URL=$new_cdn_url
+
+# ========================================
+# Complex Configurations Path
+# ========================================
+CONFIG_PATH=$new_config_path
 EOF
 
     echo -e "${GREEN}[✔] .env 配置文件已成功写入并更新！${NC}"
