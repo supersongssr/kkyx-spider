@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KKYX Spider DB Viewer - 控制台</title>
+    <!-- Import Outfit and Inter fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --sidebar-bg: #0f1524;
+            --card-bg: rgba(17, 24, 39, 0.6);
+            --card-border: rgba(255, 255, 255, 0.05);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.3);
+            --secondary: #a855f7;
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+            --text-desc: #cbd5e1;
+            --border-color: rgba(255, 255, 255, 0.08);
+            
+            /* Status Colors */
+            --color-pending: #f97316;
+            --color-completed: #10b981;
+            --color-needs-update: #06b6d4;
+            --color-dead-letter: #ef4444;
+            
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top Header */
+        header {
+            height: 70px;
+            background-color: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
+
+        .brand-logo svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: #fff;
+            stroke-width: 2.2;
+        }
+
+        .brand-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-desc);
+            background: rgba(255,255,255,0.04);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .user-avatar {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-completed);
+            box-shadow: 0 0 8px var(--color-completed);
+        }
+
+        .logout-btn {
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: var(--color-dead-letter);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--color-dead-letter);
+        }
+
+        /* Main Layout */
+        .dashboard-container {
+            flex: 1;
+            max-width: 1440px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 32px;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 24px;
+        }
+
+        /* Summary Cards Row */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: transparent;
+        }
+
+        .stat-card.total::after { background: linear-gradient(90deg, var(--primary), var(--secondary)); }
+        .stat-card.completed::after { background: var(--color-completed); }
+        .stat-card.pending::after { background: var(--color-pending); }
+        .stat-card.needs-update::after { background: var(--color-needs-update); }
+        .stat-card.dead-letter::after { background: var(--color-dead-letter); }
+
+        .stat-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-val-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-info {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Filter Panel */
+        .filter-panel {
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group.search {
+            flex: 2;
+        }
+
+        .filter-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-desc);
+            margin-bottom: 8px;
+        }
+
+        .filter-input {
+            width: 100%;
+            height: 42px;
+            background-color: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0 14px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 13px;
+            transition: var(--transition);
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.15);
+        }
+
+        .filter-select {
+            width: 100%;
+            height: 42px;
+            background-color: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0 14px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 13px;
+            transition: var(--transition);
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn-reset {
+            height: 42px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0 20px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-reset:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Database View Card */
+        .db-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            flex: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13.5px;
+        }
+
+        th {
+            background-color: rgba(15, 23, 42, 0.4);
+            padding: 16px 20px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-desc);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--text-main);
+        }
+
+        .cell-title {
+            font-weight: 500;
+            color: var(--text-main);
+            max-width: 320px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cell-url {
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .cell-url a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .cell-url a:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        /* Status Badge Component */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.2;
+            border: 1px solid transparent;
+        }
+
+        .status-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .status-badge.status-0 { /* Pending */
+            color: var(--color-pending);
+            background-color: rgba(249, 115, 22, 0.08);
+            border-color: rgba(249, 115, 22, 0.15);
+        }
+        .status-badge.status-0::before {
+            background-color: var(--color-pending);
+            box-shadow: 0 0 8px var(--color-pending);
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.status-1 { /* Completed */
+            color: var(--color-completed);
+            background-color: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.15);
+        }
+        .status-badge.status-1::before {
+            background-color: var(--color-completed);
+            box-shadow: 0 0 8px var(--color-completed);
+        }
+
+        .status-badge.status-2 { /* Needs Update */
+            color: var(--color-needs-update);
+            background-color: rgba(6, 182, 212, 0.08);
+            border-color: rgba(6, 182, 212, 0.15);
+        }
+        .status-badge.status-2::before {
+            background-color: var(--color-needs-update);
+            box-shadow: 0 0 8px var(--color-needs-update);
+        }
+
+        .status-badge.status-3 { /* Dead Letter */
+            color: var(--color-dead-letter);
+            background-color: rgba(239, 68, 68, 0.08);
+            border-color: rgba(239, 68, 68, 0.15);
+        }
+        .status-badge.status-3::before {
+            background-color: var(--color-dead-letter);
+            box-shadow: 0 0 8px var(--color-dead-letter);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* WP Sync Badge */
+        .sync-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .sync-badge.synced {
+            background-color: rgba(168, 85, 247, 0.08);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+
+        .sync-badge.unsynced {
+            background-color: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Actions Button */
+        .btn-action {
+            background-color: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-action:hover {
+            background-color: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        /* Pagination Footer */
+        .pagination-container {
+            border-top: 1px solid var(--border-color);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .pagination-info span {
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-page {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-desc);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .btn-page:hover:not(:disabled) {
+            background-color: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        .btn-page:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-page.active {
+            background-color: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        /* Slide-Out Detail Panel */
+        .detail-drawer {
+            position: fixed;
+            top: 0;
+            right: -600px;
+            width: 600px;
+            height: 100vh;
+            background-color: #0d121f;
+            border-left: 1px solid var(--border-color);
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-drawer.open {
+            right: 0;
+        }
+
+        .drawer-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-title-sub {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .drawer-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 480px;
+        }
+
+        .btn-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .btn-close:hover {
+            color: var(--text-main);
+            background-color: rgba(255,255,255,0.05);
+        }
+
+        /* Drawer Tabs */
+        .drawer-tabs {
+            display: flex;
+            background-color: rgba(15, 23, 42, 0.4);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+        }
+
+        .drawer-tab {
+            padding: 14px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .drawer-tab:hover {
+            color: var(--text-main);
+        }
+
+        .drawer-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Drawer Content */
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Info Form Styling */
+        .info-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .info-value-box {
+            background-color: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13.5px;
+            color: var(--text-desc);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 42px;
+            word-break: break-all;
+        }
+
+        .info-value-box.clickable {
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .info-value-box.clickable:hover {
+            border-color: var(--primary);
+            color: var(--text-main);
+        }
+
+        .btn-copy {
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .btn-copy:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Description tab */
+        .game-desc-container {
+            background-color: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-desc);
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        /* Download Links */
+        .link-card {
+            background-color: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .link-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .link-platform {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 13px;
+        }
+
+        .link-url {
+            font-size: 12px;
+            color: var(--text-muted);
+            word-break: break-all;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .link-pwd {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Assets Grid */
+        .assets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .asset-card {
+            background-color: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .asset-preview {
+            aspect-ratio: 16/10;
+            background-color: #05070a;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .asset-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: var(--transition);
+        }
+
+        .asset-preview:hover img {
+            transform: scale(1.05);
+        }
+
+        .asset-info {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .asset-badge {
+            align-self: flex-start;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 9px;
+            margin-bottom: 4px;
+        }
+
+        .asset-badge.cover {
+            background-color: rgba(168, 85, 247, 0.15);
+            color: #d8b4fe;
+        }
+
+        .asset-badge.content {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #c7d2fe;
+        }
+
+        .asset-size {
+            color: var(--text-desc);
+        }
+
+        /* Drawer Footer Action */
+        .drawer-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background-color: #0b0f19;
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px var(--primary-glow);
+        }
+
+        .btn-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(99, 102, 241, 0.4);
+            filter: brightness(1.1);
+        }
+
+        /* Overlay */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 90;
+            display: none;
+        }
+
+        .drawer-overlay.open {
+            display: block;
+        }
+
+        /* Toast Message */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 13.5px;
+            font-weight: 500;
+        }
+        
+        .toast.error {
+            background-color: #ef4444;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="brand-logo">
+                <svg viewBox="0 0 24 24">
+                    <path d="M4 7V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M9 22h6M12 17v5M5 17h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z"></path>
+                </svg>
+            </div>
+            <h1 class="brand-title">KKYX Spider Control</h1>
+        </div>
+        <div class="header-actions">
+            <div class="user-badge">
+                <span class="user-avatar"></span>
+                <span>{{ user }} (管理员)</span>
+            </div>
+            <button class="logout-btn" onclick="window.location.href='/logout'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                登出
+            </button>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <!-- Stats Row -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card total">
+                <span class="stat-label">总爬取任务</span>
+                <div class="stat-val-row">
+                    <span class="stat-value" id="stat-total">-</span>
+                </div>
+                <span class="stat-info" id="stat-db-size">DB 大小: -</span>
+            </div>
+            <div class="stat-card completed">
+                <span class="stat-label">爬取成功 (COMPLETED)</span>
+                <div class="stat-val-row">
+                    <span class="stat-value" id="stat-completed" style="color: var(--color-completed)">-</span>
+                </div>
+                <span class="stat-info" id="stat-wp-synced">WP 已同步: -</span>
+            </div>
+            <div class="stat-card pending">
+                <span class="stat-label">等待中 (PENDING)</span>
+                <div class="stat-val-row">
+                    <span class="stat-value" id="stat-pending" style="color: var(--color-pending)">-</span>
+                </div>
+                <span class="stat-info">等待调度器处理</span>
+            </div>
+            <div class="stat-card needs-update">
+                <span class="stat-label">需要更新 (NEEDS_UPDATE)</span>
+                <div class="stat-val-row">
+                    <span class="stat-value" id="stat-needs-update" style="color: var(--color-needs-update)">-</span>
+                </div>
+                <span class="stat-info" id="stat-assets-count">素材文件总数: -</span>
+            </div>
+            <div class="stat-card dead-letter">
+                <span class="stat-label">失败死信 (DEAD_LETTER)</span>
+                <div class="stat-val-row">
+                    <span class="stat-value" id="stat-dead-letter" style="color: var(--color-dead-letter)">-</span>
+                </div>
+                <span class="stat-info" id="stat-last-modified">最后更新: -</span>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel">
+            <div class="filter-group search">
+                <label class="filter-label" for="filterSearch">搜索标题 / URL</label>
+                <input class="filter-input" type="text" id="filterSearch" placeholder="输入游戏标题或页面链接进行模糊匹配...">
+            </div>
+            <div class="filter-group">
+                <label class="filter-label" for="filterStatus">任务状态</label>
+                <select class="filter-select" id="filterStatus">
+                    <option value="">全部</option>
+                    <option value="0">等待中 (PENDING)</option>
+                    <option value="1">爬取成功 (COMPLETED)</option>
+                    <option value="2">需要更新 (NEEDS_UPDATE)</option>
+                    <option value="3">失败死信 (DEAD_LETTER)</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label" for="filterSync">WP 同步状态</label>
+                <select class="filter-select" id="filterSync">
+                    <option value="">全部</option>
+                    <option value="synced">已同步</option>
+                    <option value="unsynced">未同步</option>
+                </select>
+            </div>
+            <button class="btn-reset" onclick="resetFilters()">重置筛选</button>
+        </div>
+
+        <!-- Database Card -->
+        <div class="db-card">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">ID</th>
+                            <th>游戏标题</th>
+                            <th>源站链接</th>
+                            <th style="width: 160px;">状态</th>
+                            <th style="width: 120px;">WP 同步</th>
+                            <th style="width: 120px;">发布日期</th>
+                            <th style="width: 100px; text-align: right;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gamesTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">正在加载数据...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Footer -->
+            <div class="pagination-container">
+                <div class="pagination-info" id="paginationInfo">
+                    共 <span>0</span> 条记录，当前第 <span>0</span> / <span>0</span> 页
+                </div>
+                <div class="pagination-controls" id="paginationControls">
+                    <!-- Dynamic Pagination Buttons -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Drawer Overlay -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+    <!-- Detail Drawer -->
+    <div class="detail-drawer" id="detailDrawer">
+        <div class="drawer-header">
+            <div>
+                <div class="drawer-title-sub" id="drawerGameId">GAME ID: -</div>
+                <div class="drawer-title" id="drawerGameTitle">游戏详情</div>
+            </div>
+            <button class="btn-close" onclick="closeDrawer()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <div class="drawer-tabs">
+            <button class="drawer-tab active" onclick="switchTab('tab-basic', this)">基本属性</button>
+            <button class="drawer-tab" onclick="switchTab('tab-desc', this)">游戏介绍</button>
+            <button class="drawer-tab" onclick="switchTab('tab-links', this)">云盘链接</button>
+            <button class="drawer-tab" onclick="switchTab('tab-assets', this)">素材资源</button>
+        </div>
+
+        <div class="drawer-body">
+            <!-- Tab: Basic Info -->
+            <div class="tab-content active" id="tab-basic">
+                <div class="info-grid">
+                    <div class="info-row">
+                        <label class="info-label">源站链接</label>
+                        <div class="info-value-box clickable" id="info-source-url">
+                            <span>-</span>
+                            <button class="btn-copy" onclick="event.stopPropagation(); copyTextFromElement('info-source-url-text')">复制</button>
+                        </div>
+                        <span id="info-source-url-text" style="display:none"></span>
+                    </div>
+
+                    <div class="info-row">
+                        <label class="info-label">发布日期</label>
+                        <div class="info-value-box" id="info-publish-date">-</div>
+                    </div>
+
+                    <div class="info-row">
+                        <label class="info-label">最后一次在列表页看到的时间</label>
+                        <div class="info-value-box" id="info-last-seen">-</div>
+                    </div>
+
+                    <div class="info-row">
+                        <label class="info-label">网盘分享链接 (Pan URL)</label>
+                        <div class="info-value-box clickable" id="info-pan-url">
+                            <span>-</span>
+                            <button class="btn-copy" onclick="event.stopPropagation(); copyTextFromElement('info-pan-url-text')">复制</button>
+                        </div>
+                        <span id="info-pan-url-text" style="display:none"></span>
+                    </div>
+
+                    <div class="info-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label class="info-label">网盘访问密码</label>
+                            <div class="info-value-box clickable" id="info-access-pwd">
+                                <span>-</span>
+                                <button class="btn-copy" onclick="event.stopPropagation(); copyTextFromElement('info-access-pwd-text')">复制</button>
+                            </div>
+                            <span id="info-access-pwd-text" style="display:none"></span>
+                        </div>
+                        <div>
+                            <label class="info-label">解压密码</label>
+                            <div class="info-value-box clickable" id="info-extract-pwd">
+                                <span>-</span>
+                                <button class="btn-copy" onclick="event.stopPropagation(); copyTextFromElement('info-extract-pwd-text')">复制</button>
+                            </div>
+                            <span id="info-extract-pwd-text" style="display:none"></span>
+                        </div>
+                    </div>
+
+                    <div class="info-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label class="info-label">WordPress 同步 Post ID</label>
+                            <div class="info-value-box" id="info-wp-id">-</div>
+                        </div>
+                        <div>
+                            <label class="info-label">重试失败计数</label>
+                            <div class="info-value-box" id="info-retry-count">-</div>
+                        </div>
+                    </div>
+
+                    <div class="info-row">
+                        <label class="info-label" for="edit-crawl-status">管理任务状态</label>
+                        <select class="filter-select" id="edit-crawl-status">
+                            <option value="0">0 - 等待中 (PENDING)</option>
+                            <option value="1">1 - 成功抓取 (COMPLETED)</option>
+                            <option value="2">2 - 需要更新 (NEEDS_UPDATE)</option>
+                            <option value="3">3 - 失败死信 (DEAD_LETTER)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Description -->
+            <div class="tab-content" id="tab-desc">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <label class="info-label">抓取的 HTML 详情介绍</label>
+                    <button class="btn-copy" onclick="toggleRawDesc()" id="btnToggleRawDesc">查看源码</button>
+                </div>
+                <div class="game-desc-container" id="game-desc-container">
+                    <!-- Rendered HTML description will go here -->
+                </div>
+                <pre class="game-desc-container" id="game-desc-raw" style="display: none; white-space: pre-wrap; font-family: monospace; font-size: 11px;"></pre>
+            </div>
+
+            <!-- Tab: Download Links -->
+            <div class="tab-content" id="tab-links">
+                <label class="info-label" style="display:block; margin-bottom:12px;">抓取到的网盘链接列表</label>
+                <div id="game-links-container">
+                    <!-- Links list will go here -->
+                </div>
+            </div>
+
+            <!-- Tab: Assets -->
+            <div class="tab-content" id="tab-assets">
+                <label class="info-label" style="display:block; margin-bottom:12px;">下载到本地的图片资源</label>
+                <div class="assets-grid" id="game-assets-container">
+                    <!-- Assets grid will go here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="drawer-footer">
+            <button class="btn-reset" onclick="closeDrawer()">取消</button>
+            <button class="btn-save" onclick="saveGameStatus()">保存修改</button>
+        </div>
+    </div>
+
+    <!-- Toast Component -->
+    <div class="toast" id="toast">保存成功!</div>
+
+    <script>
+        // Global State
+        let currentPage = 1;
+        const perPage = 15;
+        let selectedGameId = null;
+        let activeFilters = {
+            search: '',
+            status: '',
+            sync_status: ''
+        };
+        let isShowingRawDesc = false;
+
+        // On Load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStats();
+            fetchGames();
+            
+            // Set up filter event listeners
+            document.getElementById('filterSearch').addEventListener('input', debounce((e) => {
+                activeFilters.search = e.target.value;
+                currentPage = 1;
+                fetchGames();
+            }, 300));
+
+            document.getElementById('filterStatus').addEventListener('change', (e) => {
+                activeFilters.status = e.target.value;
+                currentPage = 1;
+                fetchGames();
+            });
+
+            document.getElementById('filterSync').addEventListener('change', (e) => {
+                activeFilters.sync_status = e.target.value;
+                currentPage = 1;
+                fetchGames();
+            });
+        });
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // Fetch dashboard statistics
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (!res.ok) throw new Error('Failed to fetch statistics');
+                const data = await res.json();
+                
+                document.getElementById('stat-total').innerText = data.total_games;
+                document.getElementById('stat-completed').innerText = data.status_counts.completed;
+                document.getElementById('stat-pending').innerText = data.status_counts.pending;
+                document.getElementById('stat-needs-update').innerText = data.status_counts.needs_update;
+                document.getElementById('stat-dead-letter').innerText = data.status_counts.dead_letter;
+                
+                document.getElementById('stat-db-size').innerText = `DB 大小: ${data.db_size}`;
+                document.getElementById('stat-wp-synced').innerText = `WP 已同步: ${data.wp_synced_count} 个`;
+                document.getElementById('stat-assets-count').innerText = `素材文件总数: ${data.assets_count} 个`;
+                
+                if (data.db_last_modified) {
+                    const date = new Date(data.db_last_modified);
+                    document.getElementById('stat-last-modified').innerText = `最后更新: ${formatDate(date)}`;
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('加载系统统计信息失败', true);
+            }
+        }
+
+        // Fetch games page
+        async function fetchGames() {
+            try {
+                const queryParams = new URLSearchParams({
+                    page: currentPage,
+                    per_page: perPage,
+                    search: activeFilters.search,
+                    status: activeFilters.status,
+                    sync_status: activeFilters.sync_status
+                });
+                
+                const res = await fetch(`/api/games?${queryParams}`);
+                if (!res.ok) throw new Error('Failed to fetch games list');
+                const data = await res.json();
+                
+                renderTable(data.games);
+                renderPagination(data.pagination);
+            } catch (err) {
+                console.error(err);
+                showToast('加载数据库列表失败', true);
+            }
+        }
+
+        // Format dates
+        function formatDate(dateObj) {
+            if (!dateObj) return '-';
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            const hh = String(dateObj.getHours()).padStart(2, '0');
+            const mm = String(dateObj.getMinutes()).padStart(2, '0');
+            return `${y}-${m}-${d} ${hh}:${mm}`;
+        }
+        
+        function formatShortDate(dateStr) {
+            if (!dateStr) return '-';
+            if (dateStr.includes('T')) {
+                // ISO format
+                const date = new Date(dateStr);
+                return formatDate(date);
+            }
+            return dateStr; // already short string
+        }
+
+        // Render Table content
+        function renderTable(games) {
+            const tbody = document.getElementById('gamesTableBody');
+            
+            if (!games || games.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">暂无匹配的数据记录</td></tr>`;
+                return;
+            }
+            
+            tbody.innerHTML = games.map(game => {
+                let statusText = '未知';
+                if (game.crawl_status === 0) statusText = '等待中 PENDING';
+                else if (game.crawl_status === 1) statusText = '抓取成功 COMPLETED';
+                else if (game.crawl_status === 2) statusText = '需要更新 NEEDS_UPDATE';
+                else if (game.crawl_status === 3) statusText = '失败死信 DEAD_LETTER';
+                
+                const syncTag = game.is_synced 
+                    ? `<span class="sync-badge synced">已同步 (ID:${game.wp_post_id})</span>` 
+                    : `<span class="sync-badge unsynced">未同步</span>`;
+                
+                return `
+                    <tr>
+                        <td>${game.id}</td>
+                        <td>
+                            <div class="cell-title" title="${game.title}">${escapeHTML(game.title)}</div>
+                        </td>
+                        <td>
+                            <div class="cell-url">
+                                <a href="${game.source_url}" target="_blank" title="${game.source_url}">
+                                    ${game.source_url} 🔗
+                                </a>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-${game.crawl_status}">${statusText}</span>
+                        </td>
+                        <td>${syncTag}</td>
+                        <td>${game.publish_date || '-'}</td>
+                        <td style="text-align: right;">
+                            <button class="btn-action" onclick="openDrawer(${game.id})">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                详情
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Pagination buttons
+        function renderPagination(pagination) {
+            const info = document.getElementById('paginationInfo');
+            info.innerHTML = `共 <span>${pagination.total_records}</span> 条记录，当前第 <span>${pagination.page}</span> / <span>${pagination.total_pages || 1}</span> 页`;
+            
+            const controls = document.getElementById('paginationControls');
+            let html = '';
+            
+            // First page button
+            html += `<button class="btn-page" onclick="changePage(1)" ${pagination.page === 1 ? 'disabled' : ''}>&laquo;</button>`;
+            // Prev page button
+            html += `<button class="btn-page" onclick="changePage(${pagination.page - 1})" ${pagination.page === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+            
+            // Generate visible page numbers
+            let startPage = Math.max(1, pagination.page - 2);
+            let endPage = Math.min(pagination.total_pages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="btn-page ${pagination.page === i ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            // Next page button
+            html += `<button class="btn-page" onclick="changePage(${pagination.page + 1})" ${pagination.page === pagination.total_pages || pagination.total_pages === 0 ? 'disabled' : ''}>&rsaquo;</button>`;
+            // Last page button
+            html += `<button class="btn-page" onclick="changePage(${pagination.total_pages})" ${pagination.page === pagination.total_pages || pagination.total_pages === 0 ? 'disabled' : ''}>&raquo;</button>`;
+            
+            controls.innerHTML = html;
+        }
+
+        function changePage(p) {
+            currentPage = p;
+            fetchGames();
+        }
+
+        // Reset Filter panels
+        function resetFilters() {
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterSync').value = '';
+            activeFilters = { search: '', status: '', sync_status: '' };
+            currentPage = 1;
+            fetchGames();
+        }
+
+        // Open details side drawer
+        async function openDrawer(gameId) {
+            try {
+                selectedGameId = gameId;
+                const res = await fetch(`/api/games/${gameId}`);
+                if (!res.ok) throw new Error('Failed to load game details');
+                const game = await res.json();
+                
+                // Set Header
+                document.getElementById('drawerGameId').innerText = `GAME ID: ${game.id}`;
+                document.getElementById('drawerGameTitle').innerText = game.title;
+                
+                // Populate Basic tab
+                populateBasicTab(game);
+                
+                // Populate Description tab
+                populateDescriptionTab(game);
+                
+                // Populate Download links tab
+                populateDownloadLinksTab(game);
+                
+                // Populate Assets tab
+                populateAssetsTab(game);
+                
+                // Show Drawer
+                document.getElementById('detailDrawer').classList.add('open');
+                document.getElementById('drawerOverlay').classList.add('open');
+                
+                // Default back to first tab
+                const tabs = document.querySelectorAll('.drawer-tab');
+                switchTab('tab-basic', tabs[0]);
+                
+            } catch (err) {
+                console.error(err);
+                showToast('加载详情失败', true);
+            }
+        }
+
+        function populateBasicTab(game) {
+            // Source URL setup
+            const sourceBox = document.getElementById('info-source-url');
+            const sourceText = document.getElementById('info-source-url-text');
+            sourceText.innerText = game.source_url;
+            sourceBox.querySelector('span').innerHTML = `<a href="${game.source_url}" target="_blank" style="color:var(--text-desc);text-decoration:none">${game.source_url} 🔗</a>`;
+            sourceBox.onclick = () => window.open(game.source_url, '_blank');
+            
+            // Publish Date
+            document.getElementById('info-publish-date').innerText = game.publish_date || '未设置';
+            
+            // Last Seen
+            document.getElementById('info-last-seen').innerText = formatShortDate(game.last_index_seen_time);
+            
+            // Pan URL setup
+            const panBox = document.getElementById('info-pan-url');
+            const panText = document.getElementById('info-pan-url-text');
+            if (game.pan_url) {
+                panText.innerText = game.pan_url;
+                panBox.querySelector('span').innerHTML = `<a href="${game.pan_url}" target="_blank" style="color:var(--text-desc);text-decoration:none">${game.pan_url} 🔗</a>`;
+                panBox.onclick = () => window.open(game.pan_url, '_blank');
+            } else {
+                panText.innerText = '';
+                panBox.querySelector('span').innerText = '未爬取或无网盘链接';
+                panBox.onclick = null;
+            }
+            
+            // Access Pwd
+            const accBox = document.getElementById('info-access-pwd');
+            const accText = document.getElementById('info-access-pwd-text');
+            accText.innerText = game.access_password || '';
+            accBox.querySelector('span').innerText = game.access_password || '无密码';
+            accBox.onclick = game.access_password ? () => copyText(game.access_password) : null;
+            
+            // Extract Pwd
+            const extBox = document.getElementById('info-extract-pwd');
+            const extText = document.getElementById('info-extract-pwd-text');
+            extText.innerText = game.extract_password || '';
+            extBox.querySelector('span').innerText = game.extract_password || '无密码';
+            extBox.onclick = game.extract_password ? () => copyText(game.extract_password) : null;
+            
+            // WP Post ID & Retries
+            document.getElementById('info-wp-id').innerText = game.wp_post_id ? `ID: ${game.wp_post_id} (${game.synced_at ? formatShortDate(game.synced_at) : '已同步'})` : '未同步';
+            document.getElementById('info-retry-count').innerText = `${game.retry_count} 次`;
+            
+            // Crawl Status Edit Select
+            document.getElementById('edit-crawl-status').value = game.crawl_status;
+        }
+
+        function populateDescriptionTab(game) {
+            const container = document.getElementById('game-desc-container');
+            const rawContainer = document.getElementById('game-desc-raw');
+            
+            if (game.description) {
+                container.innerHTML = game.description;
+                rawContainer.innerText = game.description;
+            } else {
+                container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无描述信息内容</div>`;
+                rawContainer.innerText = '暂无描述信息内容';
+            }
+            
+            // Reset raw description switch state
+            isShowingRawDesc = false;
+            document.getElementById('btnToggleRawDesc').innerText = '查看源码';
+            container.style.display = 'block';
+            rawContainer.style.display = 'none';
+        }
+
+        function toggleRawDesc() {
+            const container = document.getElementById('game-desc-container');
+            const rawContainer = document.getElementById('game-desc-raw');
+            const btn = document.getElementById('btnToggleRawDesc');
+            
+            isShowingRawDesc = !isShowingRawDesc;
+            if (isShowingRawDesc) {
+                btn.innerText = '渲染视图';
+                container.style.display = 'none';
+                rawContainer.style.display = 'block';
+            } else {
+                btn.innerText = '查看源码';
+                container.style.display = 'block';
+                rawContainer.style.display = 'none';
+            }
+        }
+
+        function populateDownloadLinksTab(game) {
+            const container = document.getElementById('game-links-container');
+            
+            if (!game.download_links || game.download_links.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无已解析的云盘下载链接</div>`;
+                return;
+            }
+            
+            container.innerHTML = game.download_links.map((link, idx) => {
+                return `
+                    <div class="link-card">
+                        <div class="link-header">
+                            <span class="link-platform">${escapeHTML(link.platform || '未知网盘')}</span>
+                            ${link.password ? `<span class="link-pwd">提取码: <strong>${escapeHTML(link.password)}</strong> <button class="btn-copy" onclick="copyText('${escapeHTML(link.password)}')">复制</button></span>` : ''}
+                        </div>
+                        <div class="link-url">
+                            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="link-url-text-${idx}">${escapeHTML(link.url)}</span>
+                            <button class="btn-copy" onclick="copyText('${escapeHTML(link.url)}')">复制链接</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function populateAssetsTab(game) {
+            const container = document.getElementById('game-assets-container');
+            
+            if (!game.assets || game.assets.length === 0) {
+                container.innerHTML = `<div style="grid-column: span 2; text-align:center; padding:40px; color:var(--text-muted);">暂无本地下载存储的图片资源</div>`;
+                return;
+            }
+            
+            container.innerHTML = game.assets.map(asset => {
+                // Check if local file path is relative data/storage or absolute. We route via /data/storage/ in Flask app.
+                // Replace any leading 'data/storage/' or similar.
+                const relativeUrl = asset.local_path.startsWith('data/storage/')
+                    ? '/' + asset.local_path
+                    : '/data/storage/' + asset.local_path.split('/').pop();
+                
+                const sizeKB = asset.file_size ? `${(asset.file_size / 1024).toFixed(1)} KB` : '未知大小';
+                
+                return `
+                    <div class="asset-card">
+                        <div class="asset-preview">
+                            <img src="${relativeUrl}" alt="Game Asset Image" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23080c14%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2364748b%22 font-size=%2212%22>加载失败</text></svg>';">
+                        </div>
+                        <div class="asset-info">
+                            <span class="asset-badge ${asset.asset_type}">${asset.asset_type === 'cover' ? '主封面图' : '内容插图'}</span>
+                            <div class="asset-size">大小: ${sizeKB}</div>
+                            <div style="word-break: break-all; margin-top:2px;">本地存储名: ${escapeHTML(asset.local_path.split('/').pop())}</div>
+                            <div style="word-break: break-all; margin-top:2px;" title="${asset.original_url}">原链接: <a href="${asset.original_url}" target="_blank" style="color:var(--primary);text-decoration:none">跳转原图 🔗</a></div>
+                            <div style="margin-top:2px;" title="${asset.md5_hash}">MD5: ${asset.md5_hash.substring(0, 12)}...</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Save changed game status
+        async function saveGameStatus() {
+            if (!selectedGameId) return;
+            const newStatus = parseInt(document.getElementById('edit-crawl-status').value);
+            
+            try {
+                // If set status back to PENDING (0) or NEEDS_UPDATE (2), default reset retry count to 0 too
+                let payload = { crawl_status: newStatus };
+                if (newStatus === 0 || newStatus === 2) {
+                    payload.retry_count = 0;
+                }
+                
+                const res = await fetch(`/api/games/${selectedGameId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!res.ok) throw new Error('Save status failed');
+                const result = await res.json();
+                
+                if (result.success) {
+                    showToast('保存修改成功!');
+                    closeDrawer();
+                    fetchStats(); // Update counters
+                    fetchGames(); // Refresh table
+                } else {
+                    showToast(result.error || '保存修改失败', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('保存修改发生网络错误', true);
+            }
+        }
+
+        // Switch Tabs inside Drawer
+        function switchTab(tabId, tabButton) {
+            // Remove active classes
+            const tabs = document.querySelectorAll('.drawer-tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(c => c.classList.remove('active'));
+            
+            // Add active classes
+            tabButton.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // Close Drawer
+        function closeDrawer() {
+            document.getElementById('detailDrawer').classList.remove('open');
+            document.getElementById('drawerOverlay').classList.remove('open');
+            selectedGameId = null;
+        }
+
+        // Copy Text Helper
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制到剪贴板!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast('复制失败，请手动选择复制', true);
+            });
+        }
+        
+        function copyTextFromElement(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            copyText(text);
+        }
+
+        // Toast message animator
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            if (isError) {
+                toast.classList.add('error');
+            } else {
+                toast.classList.remove('error');
+            }
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // HTML escaping
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
