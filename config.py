@@ -2,57 +2,54 @@
 KKYX Spider Configurations
 
 ================================================================================
+CONFIGURATION HIERARCHY (Priority from high to low):
+1. .config.py (local overrides, optional)
+2. config.py (default configurations, this file)
+3. .env (sensitive credentials)
+
+================================================================================
 REQUIRED .env ENVIRONMENT PARAMETERS:
 - KKYX_USER: KKYX Net username (Required for website login and resource crawling)
 - KKYX_PWD:  KKYX Net password (Required for website login and resource crawling)
 
 OPTIONAL .env ENVIRONMENT PARAMETERS:
-- CONFIG_PATH: Path to the complex JSON configuration file.
-               Defaults to 'config.test.json' when running in a test environment.
-               Defaults to 'config.json' in production/standard execution.
 - WP_BASE_URL: Base URL of the WordPress website (e.g., http://localhost:8080)
 - WP_USERNAME: WordPress administrator username
-- TEST_KKYX_WP_APP_PASSWORD: WordPress Application Password (specifically for REST API authentication)
+- WP_APP_PASSWORD: WordPress Application Password (specifically for REST API authentication)
 - CDN_BASE_URL: Base URL for uploading and referencing media content via CDN
+
+================================================================================
+LOCAL OVERRIDE (.config.py):
+Create a .config.py file in the project root to override any default configuration.
+Example:
+
+    # .config.py
+    config_overrides = {
+        "target_site": {
+            "base_url": "https://custom-site.com",
+        },
+        "safety": {
+            "index_scan_page_limit": 10,
+        },
+        "wordpress": {
+            "sync_batch_limit": 5,
+        },
+    }
+
+The .config.py file is optional and should be added to .gitignore.
+See docs/CONFIGURATION.md for more details.
 ================================================================================
 """
 
 import os
 import sys
-import json
 from dotenv import load_dotenv
 
 # Load sensitive credentials and paths from .env
 load_dotenv()
 
 # ==============================================================================
-# 1. Detect Environment & Explicitly Declare config.test.json for Test Environment
-# ==============================================================================
-IS_TESTING = (
-    os.getenv("ENV") == "test"
-    or os.getenv("TESTING") == "true"
-    or "pytest" in sys.modules
-    or "unittest" in sys.modules
-    or "PYTEST_CURRENT_TEST" in os.environ
-)
-
-# Explicitly declare configuration paths
-TEST_CONFIG_PATH = "config.test.json"
-PROD_CONFIG_PATH = "config.json"
-
-# If running in a test environment, prioritize config.test.json
-if IS_TESTING:
-    env_config_path = os.getenv("CONFIG_PATH")
-    # If CONFIG_PATH is not set or points to standard production config, force config.test.json
-    if not env_config_path or env_config_path == PROD_CONFIG_PATH:
-        CONFIG_PATH = TEST_CONFIG_PATH
-    else:
-        CONFIG_PATH = env_config_path
-else:
-    CONFIG_PATH = os.getenv("CONFIG_PATH", PROD_CONFIG_PATH)
-
-# ==============================================================================
-# 2. Check and Validate Required .env Environment Parameters
+# 1. Check and Validate Required .env Environment Parameters
 # ==============================================================================
 USERNAME = os.getenv("KKYX_USER") or os.getenv("KKYX_USERNAME")
 PASSWORD = os.getenv("KKYX_PWD") or os.getenv("KKYX_PASSWORD")
@@ -72,17 +69,16 @@ if missing_params:
     )
 
 # ========================================
-# 3. Optional Simple Configurations (Directly from environment / .env)
+# 2. Optional Simple Configurations (Directly from environment / .env)
 # ========================================
 WP_BASE_URL = os.getenv("WP_BASE_URL", "http://localhost:8080")
 WP_USERNAME = os.getenv("WP_USERNAME", "test-kkyx")
-WP_APP_PASSWORD = os.getenv("TEST_KKYX_WP_APP_PASSWORD", "")
+WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD", "")
 CDN_BASE_URL = os.getenv("CDN_BASE_URL", "https://test-img-cdn.freessr.bid:8443/kkyx")
 
 # ========================================
-# 4. Complex Configurations Path resolution
+# 3. Default Configurations (config.py)
 # ========================================
-# Fallback defaults in case the JSON is missing or keys are absent
 defaults = {
     "target_site": {
         "base_url": "https://www.kkyx.net",
@@ -113,7 +109,8 @@ defaults = {
     },
     "database": {
         "db_dir": ".data/db",
-        "db_file": ".data/db/kkyx_spider.db"
+        "db_file": ".data/db/kkyx_spider.db",
+        "storage_dir": ".data/storage"
     },
     "delays": {
         "index_page_delay": [3, 7],
@@ -127,8 +124,8 @@ defaults = {
         "delay_detail_max": 20
     },
     "paths": {
-        "screenshot_dir": ".screenshots",
-        "screenshot_path": ".screenshots/debug_screenshot.png"
+        "screenshot_dir": ".screenshot",
+        "screenshot_path": ".screenshot/debug_screenshot.png"
     },
     "wordpress": {
         "category_game": 68,
@@ -147,19 +144,34 @@ defaults = {
     }
 }
 
+# ========================================
+# 4. Load Local Overrides from .config.py (if exists)
+# ========================================
 config_data = defaults
-if os.path.exists(CONFIG_PATH):
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            user_config = json.load(f)
+
+try:
+    # Try to import .config.py for local overrides
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(".config", ".config.py")
+    if spec and spec.loader:
+        local_config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(local_config)
+
+        # Apply overrides if they exist
+        if hasattr(local_config, 'config_overrides'):
+            user_config = local_config.config_overrides
             # Merge user configurations into defaults dict recursively
             for section, keys in user_config.items():
                 if section in config_data and isinstance(keys, dict):
                     config_data[section].update(keys)
                 else:
                     config_data[section] = keys
-    except Exception as e:
-        print(f"Error loading config file from {CONFIG_PATH}: {e}. Using defaults.")
+            print(f"Loaded local configuration overrides from .config.py")
+except ImportError:
+    # .config.py doesn't exist, use defaults
+    pass
+except Exception as e:
+    print(f"Error loading .config.py: {e}. Using defaults.")
 
 # ========================================
 # 5. Expose Configuration Constants (Backwards Compatible)
@@ -195,7 +207,9 @@ LOG_LEVEL = config_data["debug"].get("log_level")
 # Database
 DB_DIR = config_data["database"].get("db_dir")
 DB_FILE = config_data["database"].get("db_file")
+STORAGE_DIR = config_data["database"].get("storage_dir", ".data/storage")
 os.makedirs(DB_DIR, exist_ok=True)
+os.makedirs(STORAGE_DIR, exist_ok=True)
 
 # Delays (Converts lists from JSON back to python tuples)
 INDEX_PAGE_DELAY = tuple(config_data["delays"].get("index_page_delay"))

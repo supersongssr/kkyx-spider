@@ -108,7 +108,7 @@ def save_diagnostic_info(page, suffix):
     date_str = datetime.now().strftime("%Y-%m-%d")
     
     # Create directories
-    screenshot_dir = os.path.join(".screenshots", date_str)
+    screenshot_dir = os.path.join(".screenshot", date_str)
     os.makedirs(screenshot_dir, exist_ok=True)
     os.makedirs(".debug/html", exist_ok=True)
     os.makedirs(".debug/network", exist_ok=True)

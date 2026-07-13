@@ -51,7 +51,7 @@ def process_html_images(page, html_content, game_id, db_manager):
     
     logger.info(f"[ImagePipeline] Found {len(imgs)} img tags in game ID {game_id} HTML.")
     
-    storage_dir = os.path.join("data", "storage")
+    storage_dir = config.STORAGE_DIR
     os.makedirs(storage_dir, exist_ok=True)
     
     assets_list = []
