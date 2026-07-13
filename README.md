@@ -5,75 +5,83 @@ KKYX 网络爬虫 - Python 实现的生产级 Web 爬虫与 WordPress 内容同�
 ## 📚 文档
 
 - [配置说明](docs/CONFIGURATION.md) - 详细配置说明和使用指南
-- [迁移指南](docs/MIGRATION.md) - 从旧版本迁移的步骤
-- [重构报告](docs/REFACTORING_REPORT.md) - 配置系统重构报告
-- [快速参考](docs/CONFIG_QUICK_REFERENCE.txt) - 配置快速参考卡片
-- [完成总结](docs/REFACTORING_COMPLETE.txt) - 重构完成总结
-- [Git 提交指南](docs/GIT_COMMIT_GUIDE.md) - Git 提交建议
 
 ## 🚀 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-# 安装 Playwright 浏览器
-playwright install chromium
+# 一键初始化（安装 uv、Python 依赖、Playwright 浏览器，并交互式填写凭据）
+./init.sh
+
+# 或手动安装
+uv sync
+uv run playwright install chromium
 ```
 
-### 2. 配置环境
+### 2. 配置凭据
+
+所有配置都在 TOML 文件中（不再使用 `.env`）：
+
+- `config.default.toml` — 默认值（提交到 Git，凭据留空）
+- `.config.toml` — 本地覆盖（**不提交到 Git**，在此填写真实凭据）
 
 ```bash
-# 1. 配置敏感信息（编辑 .env 文件）
-# KKYX_USER=your_username
-# KKYX_PWD=your_password
-
-# 2. 可选：创建本地配置覆盖（编辑 .config.py 文件）
-# config_overrides = {
-#     "safety": {
-#         "index_scan_page_limit": 10,
-#     }
-# }
+# 编辑根目录 .config.toml，至少填写：
+# [kkyx]
+# username = "your_username"
+# password = "your_password"
 ```
 
-### 3. 首次运行
+也可通过管理菜单交互式填写：
 
 ```bash
-# 1. 首次登录（生成 state.json）
-python3 .auth/auto_login.py
+./run.sh    # 选择 4：交互式修改凭据
+```
 
-# 2. 运行爬虫
-uv run main.py
+### 3. 运行
+
+```bash
+uv run main.py              # 直接运行
+./run.sh            # 或通过管理菜单
 ```
 
 ### 4. 验证配置
 
 ```bash
-# 运行配置验证脚本
-./verify_config.sh
+./scripts/verify_config.sh
 ```
 
 ## 📁 项目结构
 
 ```
 kkyx-spider/
-├── config.py              # 默认配置文件
-├── .config.py            # 本地配置覆盖（可选）
-├── .env                  # 敏感凭据（不提交到 Git）
-├── main.py               # 程序入口
-├── core/                 # 核心模块
-├── web/                  # Web 查看器
-├── docs/                 # 项目文档
-└── .data/                # 私有数据（不提交到 Git）
+├── .gitignore
+├── README.md
+├── pyproject.toml          # Python 项目配置
+├── uv.lock                 # 依赖锁定
+├── main.py                 # 程序入口
+├── .config.toml            # 本地配置覆盖（含凭据，不提交到 Git）
+├── config.default.toml     # 默认配置（凭据留空）
+├── config/                 # 配置加载器包（import config）
+│   └── __init__.py         #   读取 TOML 并暴露常量（代码，用户不编辑）
+├── scripts/                # 辅助脚本
+│   └── verify_config.sh    #   配置验证
+├── core/                   # 核心模块
+├── web/                    # Web 查看器
+├── docs/                   # 项目文档
+└── plans/                  # 架构设计
 ```
 
 ## 🔧 配置说明
 
-详细配置说明请参考 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
-
 配置层次（优先级从高到低）：
-1. `.config.py` - 本地配置覆盖（可选）
-2. `config.py` - 默认配置
-3. `.env` - 敏感凭据
+1. `.config.toml` - 本地覆盖（含凭据，不提交到 Git）
+2. `config.default.toml` - 默认配置
+3. （已移除 `.env`，所有配置统一到 TOML）
+
+> `config` 包是加载器：读取上述 TOML 文件并深度合并，再暴露为 Python 常量，
+> 业务代码通过 `config.XXX` 访问。详见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
 
 ## 📄 许可证
 

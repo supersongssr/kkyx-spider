@@ -19,10 +19,10 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 
 DB_PATH = config.DB_FILE
 
-# Get login credentials from environment/dotenv
-# Priority: 1. WEB_VIEWER_USER/PWD, 2. KKYX_USER/PWD, 3. admin/admin_kkyx
-AUTH_USER = os.getenv("WEB_VIEWER_USER") or os.getenv("KKYX_USER") or "admin"
-AUTH_PWD = os.getenv("WEB_VIEWER_PASSWORD") or os.getenv("KKYX_PWD") or "admin_kkyx"
+# Get login credentials for the web viewer.
+# Priority: 1. WEB_VIEWER_USER/PWD (real env vars), 2. KKYX creds from config, 3. admin/admin_kkyx
+AUTH_USER = os.getenv("WEB_VIEWER_USER") or config.USERNAME or "admin"
+AUTH_PWD = os.getenv("WEB_VIEWER_PASSWORD") or config.PASSWORD or "admin_kkyx"
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)

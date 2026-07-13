@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
 # Exit immediately if a command exits with a non-zero status
-# but let us handle individual failures gracefully where needed.
 set -e
+
+# Always run from the project root regardless of where this script is invoked.
+# This script lives in the project root. cd to its directory regardless of CWD.
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT"
 
 # Define Colors for terminal output
 GREEN='\033[0;32m'
@@ -14,21 +18,10 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper functions for printing status
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS] [✔]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN] [!]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR] [✘]${NC} $1"
-}
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS] [✔]${NC} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN] [!]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR] [✘]${NC} $1"; }
 
 # ASCII Art Header
 show_header() {
@@ -63,9 +56,8 @@ fi
 # ------------------------------------------------------------------------------
 # Step 2: Check / Install Astral uv
 # ------------------------------------------------------------------------------
-log_info "1/6. 检测/安装 Python 包管理器: uv..."
+log_info "1/5. 检测/安装 Python 包管理器: uv..."
 
-# Add local bin to path just in case uv was installed recently
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 UV_PATH=$(command -v uv 2>/dev/null || true)
@@ -76,7 +68,6 @@ else
     log_warn "未检测到 uv。正在尝试为您自动安装 Astral uv..."
     if which curl >/dev/null 2>&1; then
         curl -LsSf https://astral.sh/uv/install.sh | sh
-        # Reload path
         export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
         if which uv >/dev/null 2>&1; then
             log_success "uv 安装成功！当前版本: $(uv --version)"
@@ -102,9 +93,8 @@ fi
 # ------------------------------------------------------------------------------
 # Step 3: Setup Virtual Environment & Sync Dependencies
 # ------------------------------------------------------------------------------
-log_info "2/6. 正在同步 Python 虚拟环境与依赖项..."
+log_info "2/5. 正在同步 Python 虚拟环境与依赖项..."
 if [ -f "pyproject.toml" ]; then
-    # uv sync will create the virtual environment and sync dependencies
     uv sync
     log_success "Python 虚拟环境配置并同步成功！(.venv)"
 else
@@ -115,7 +105,7 @@ fi
 # ------------------------------------------------------------------------------
 # Step 4: Install Playwright Browsers
 # ------------------------------------------------------------------------------
-log_info "3/6. 正在安装 Playwright 浏览器内核 (Chrome/Chromium/etc.)..."
+log_info "3/5. 正在安装 Playwright 浏览器内核 (Chrome/Chromium/etc.)..."
 if uv run playwright install chromium --with-deps; then
     log_success "Playwright Chromium 浏览器及系统依赖安装/验证成功！"
 else
@@ -129,151 +119,185 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Step 5: Configure Environment Variables (.env)
+# Step 5: Configure credentials (.config.toml)
 # ------------------------------------------------------------------------------
-log_info "4/6. 正在配置环境变量 (.env)..."
+log_info "4/5. 正在配置本地凭据 (.config.toml)..."
 
-setup_env_interactive() {
-    # Read current if exists
+# Read current credentials from .config.toml (robust via shlex-quoted eval)
+read_current_creds() {
+    eval "$(uv run python3 -c '
+import tomllib, shlex
+try:
+    d = tomllib.load(open(".config.toml", "rb"))
+except Exception:
+    d = {}
+k = d.get("kkyx", {})
+w = d.get("wordpress", {})
+c = d.get("cdn", {})
+def q(v):
+    return shlex.quote(str(v) if v is not None else "")
+print("current_user=" + q(k.get("username", "")))
+print("current_pwd=" + q(k.get("password", "")))
+print("current_wp_url=" + q(w.get("base_url", "")))
+print("current_wp_user=" + q(w.get("username", "")))
+print("current_wp_pwd=" + q(w.get("app_password", "")))
+print("current_cdn_url=" + q(c.get("base_url", "")))
+' 2>/dev/null)"
+}
+
+# Deep-merge credential values into .config.toml, preserving other sections.
+# Values are passed via environment variables to avoid quoting issues.
+write_creds() {
+    NEW_KKYX_USER="$new_user" \
+    NEW_KKYX_PWD="$new_pwd" \
+    NEW_WP_URL="$new_wp_url" \
+    NEW_WP_USER="$new_wp_user" \
+    NEW_WP_PWD="$new_wp_pwd" \
+    NEW_CDN_URL="$new_cdn_url" \
+    uv run python3 -c '
+import os, tomllib
+from pathlib import Path
+
+p = Path(".config.toml")
+data = {}
+if p.exists():
+    with open(p, "rb") as f:
+        data = tomllib.load(f)
+
+new = {
+    "kkyx": {"username": os.environ["NEW_KKYX_USER"], "password": os.environ["NEW_KKYX_PWD"]},
+    "wordpress": {"base_url": os.environ["NEW_WP_URL"], "username": os.environ["NEW_WP_USER"], "app_password": os.environ["NEW_WP_PWD"]},
+    "cdn": {"base_url": os.environ["NEW_CDN_URL"]},
+}
+
+def merge(a, b):
+    for k, v in b.items():
+        if k in a and isinstance(a[k], dict) and isinstance(v, dict):
+            merge(a[k], v)
+        else:
+            a[k] = v
+
+merge(data, new)
+
+def _fmt(v):
+    if isinstance(v, bool): return "true" if v else "false"
+    if isinstance(v, int): return str(v)
+    if isinstance(v, float): return repr(v)
+    if isinstance(v, str): return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    if isinstance(v, list): return "[" + ", ".join(_fmt(x) for x in v) + "]"
+    raise ValueError(f"unsupported type {type(v)}")
+
+def _emit(prefix, table, out):
+    scalars = {k: v for k, v in table.items() if not isinstance(v, dict)}
+    subs    = {k: v for k, v in table.items() if isinstance(v, dict)}
+    if scalars:
+        if prefix: out.append(f"[{prefix}]")
+        for k, v in scalars.items(): out.append(f"{k} = {_fmt(v)}")
+        out.append("")
+    for name, sub in subs.items():
+        _emit(f"{prefix}.{name}" if prefix else name, sub, out)
+
+def dumps(d):
+    out = []
+    _emit("", d, out)
+    return "\n".join(out).rstrip() + "\n"
+
+p.write_text(dumps(data), encoding="utf-8")
+'
+}
+
+setup_config_interactive() {
     current_user=""
     current_pwd=""
-    current_wp_url="http://localhost:8080"
-    current_wp_user="test-kkyx"
+    current_wp_url=""
+    current_wp_user=""
     current_wp_pwd=""
-    current_cdn_url="https://test-img-cdn.freessr.bid:8443/kkyx"
-    current_config_path="config.json"
-    
-    if [ -f ".env" ]; then
-        current_user=$(grep "^KKYX_USER=" .env | cut -d'=' -f2-)
-        current_pwd=$(grep "^KKYX_PWD=" .env | cut -d'=' -f2-)
-        current_wp_url=$(grep "^WP_BASE_URL=" .env | cut -d'=' -f2- || echo "http://localhost:8080")
-        current_wp_user=$(grep "^WP_USERNAME=" .env | cut -d'=' -f2- || echo "test-kkyx")
-        current_wp_pwd=$(grep "^TEST_KKYX_WP_APP_PASSWORD=" .env | cut -d'=' -f2-)
-        current_cdn_url=$(grep "^CDN_BASE_URL=" .env | cut -d'=' -f2- || echo "https://test-img-cdn.freessr.bid:8443/kkyx")
-        current_config_path=$(grep "^CONFIG_PATH=" .env | cut -d'=' -f2- || echo "config.json")
+    current_cdn_url=""
+
+    if [ -f ".config.toml" ]; then
+        read_current_creds
     fi
 
-    echo -e "${YELLOW}>>> 开始交互式配置环境变量 (直接回车保留括号内的默认/当前值):${NC}"
-    
+    echo -e "${YELLOW}>>> 开始交互式配置凭据 (直接回车保留括号内的当前值):${NC}"
+
     read -p "请输入 KKYX 用户名 [$current_user]: " new_user
     new_user=${new_user:-$current_user}
-    
+
     read -s -p "请输入 KKYX 密码 (输入时不会显示) [$current_pwd]: " new_pwd
     new_pwd=${new_pwd:-$current_pwd}
-    echo "" # newline after hidden input
-    
+    echo ""
+
     read -p "请输入 WordPress 网址 [$current_wp_url]: " new_wp_url
     new_wp_url=${new_wp_url:-$current_wp_url}
-    
+
     read -p "请输入 WordPress 用户名 [$current_wp_user]: " new_wp_user
     new_wp_user=${new_wp_user:-$current_wp_user}
-    
-    read -s -p "请输入 WordPress 应用密码 (输入时不会显示) [$current_wp_pwd]: " new_wp_pwd
+
+    read -s -p "请输入 WordPress 应用密码 (输入时不会显示) [$new_wp_pwd]: " new_wp_pwd
     new_wp_pwd=${new_wp_pwd:-$current_wp_pwd}
-    echo "" # newline
-    
+    echo ""
+
     read -p "请输入 CDN 资源根网址 [$current_cdn_url]: " new_cdn_url
     new_cdn_url=${new_cdn_url:-$current_cdn_url}
 
-    read -p "请输入复杂配置文件路径 (JSON) [$current_config_path]: " new_config_path
-    new_config_path=${new_config_path:-$current_config_path}
-
-    # Write variables to .env
-    cat <<EOF > .env
-# ==============================================================================
-# KKYX Spider Environment Configuration
-# Generated by init.sh on $(date)
-# ==============================================================================
-
-# 1. KKYX Target Site Credentials
-KKYX_USER=$new_user
-KKYX_PWD=$new_pwd
-
-# 2. WordPress Sync Configuration (Optional)
-WP_BASE_URL=$new_wp_url
-WP_USERNAME=$new_wp_user
-TEST_KKYX_WP_APP_PASSWORD=$new_wp_pwd
-
-# 3. CDN Configuration (Optional)
-CDN_BASE_URL=$new_cdn_url
-
-# 4. Complex Configurations Path
-CONFIG_PATH=$new_config_path
-EOF
-    log_success ".env 配置文件已更新完成！"
+    write_creds
+    log_success ".config.toml 凭据已更新完成！"
 }
 
 if [ "$NON_INTERACTIVE" = true ]; then
-    if [ ! -f ".env" ]; then
-        cat <<EOF > .env
-# ==============================================================================
-# KKYX Spider Environment Configuration (Default Placeholder)
-# ==============================================================================
-
-# 1. KKYX Target Site Credentials
-KKYX_USER=your_username_here
-KKYX_PWD=your_password_here
-
-# 2. WordPress Sync Configuration (Optional)
-WP_BASE_URL=http://localhost:8080
-WP_USERNAME=test-kkyx
-TEST_KKYX_WP_APP_PASSWORD=
-
-# 3. CDN Configuration (Optional)
-CDN_BASE_URL=https://test-img-cdn.freessr.bid:8443/kkyx
-
-# 4. Complex Configurations Path
-CONFIG_PATH=config.json
-EOF
-        log_warn "在非交互模式下生成了默认 .env 配置文件。请在运行项目前编辑 .env 填写正确的凭据。"
+    if [ ! -f ".config.toml" ]; then
+        new_user="your_username_here"
+        new_pwd="your_password_here"
+        new_wp_url=""
+        new_wp_user=""
+        new_wp_pwd=""
+        new_cdn_url=""
+        write_creds
+        log_warn "在非交互模式下生成了占位 .config.toml。请在运行项目前编辑 .config.toml 填写正确的凭据。"
     else
-        log_info "检测到已存在 .env 配置文件，非交互模式下跳过覆盖。"
+        log_info "检测到已存在 .config.toml，非交互模式下跳过覆盖。"
     fi
 else
-    if [ -f ".env" ]; then
-        echo -e "${YELLOW}检测到已经存在 .env 配置文件。您要重新配置吗？${NC}"
-        read -p "是否重新配置环境变量？(y/N): " reconfig
+    if [ -f ".config.toml" ]; then
+        echo -e "${YELLOW}检测到已经存在 .config.toml。您要重新配置吗？${NC}"
+        read -p "是否重新配置凭据？(y/N): " reconfig
         if [[ "$reconfig" =~ ^[Yy]$ ]]; then
-            setup_env_interactive
+            setup_config_interactive
         else
-            log_info "保留现有的 .env 配置文件。"
+            log_info "保留现有的 .config.toml。"
         fi
     else
-        setup_env_interactive
+        setup_config_interactive
     fi
 fi
 
 # ------------------------------------------------------------------------------
 # Step 6: Create Required Directories & Check DB
 # ------------------------------------------------------------------------------
-log_info "5/6. 初始化本地数据与运行目录..."
+log_info "5/5. 初始化本地数据与运行目录..."
 
 mkdir -p .data/db
-mkdir -p .screenshots
+mkdir -p .screenshot
 mkdir -p .debug/screenshots
 mkdir -p .debug/html
 mkdir -p .debug/network
 
 log_success "目录初始化成功！"
 
-# Check if SQLite DB should be created/validated
-if [ -f "config.py" ]; then
-    log_info "验证 SQLite 本地数据库初始化..."
-    # Quick Python check to make sure DB can be opened and config loads
-    if uv run python3 -c "import config; print('Database config verified:', config.DB_FILE)" >/dev/null 2>&1; then
-        log_success "系统配置与数据库连接加载成功！"
-    else
-        log_warn "系统配置加载或数据库初始化测试异常，请检查配置参数。"
-    fi
+# Validate config load + DB path
+log_info "验证配置加载与数据库路径..."
+if uv run python3 -c "import config; print('Database config verified:', config.DB_FILE)" >/dev/null 2>&1; then
+    log_success "系统配置与数据库连接加载成功！"
+else
+    log_warn "系统配置加载异常，请检查 .config.toml 中的必填项 (kkyx.username / kkyx.password)。"
 fi
 
 # ------------------------------------------------------------------------------
 # Step 7: Fix Execution Permissions
 # ------------------------------------------------------------------------------
-log_info "6/6. 设置脚本的可执行权限..."
-chmod +x run.sh || true
-chmod +x init.sh || true
-log_success "脚本权限设置成功！"
+chmod +x run.sh 2>/dev/null || true
+chmod +x init.sh 2>/dev/null || true
+chmod +x scripts/verify_config.sh 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
 # Final Initialization Status Summary
