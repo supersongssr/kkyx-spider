@@ -207,42 +207,12 @@ while true; do
     read -p "请输入选项标号 [1-7]: " choice
 
     case $choice in
-        1)
-            echo -e "\n${GREEN}[*] 正在启动采集引擎流水线...${NC}"
-            uv run python3 main.py
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
-        2)
-            echo -e "\n${GREEN}[*] 正在触发 Playwright 强制自动登录...${NC}"
-            uv run python3 .auth/auto_login.py
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
-        3)
-            check_db_status
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
-        4)
-            configure_credentials
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
-        5)
-            clear_cache
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
-        6)
-            echo -e "\n${GREEN}[*] 正在启动 Web 数据库监控控制台...${NC}"
-            echo -e "${YELLOW}控制台运行在: http://0.0.0.0:8050${NC}"
-            echo -e "${YELLOW}默认账号密码与 KKYX 凭据相同 (可设置 WEB_VIEWER_USER/WEB_VIEWER_PASSWORD 独立凭据)${NC}"
-            echo -e "${BLUE}按 Ctrl+C 可以停止服务。${NC}"
-            uv run python3 web/app.py
-            echo -e "\n${BLUE}按下任意键返回主菜单...${NC}"
-            read -n 1
-            ;;
+        1) uv run python3 main.py ;;
+        2) uv run python3 .auth/auto_login.py ;;
+        3) check_db_status ;;
+        4) configure_credentials ;;
+        5) clear_cache ;;
+        6) uv run python3 web/app.py ;;
         7)
             echo -e "\n${GREEN}感谢使用，再见！${NC}"
             exit 0
@@ -250,6 +220,10 @@ while true; do
         *)
             echo -e "\n${RED}[!] 无效的选项，请重新输入 1 到 7 的数字。${NC}"
             sleep 2
+            continue
             ;;
     esac
+    # 选项执行完毕后直接退出，让被调用脚本的输出原样保留在终端，
+    # 不再返回菜单（避免清屏覆盖错误日志）。
+    exit $?
 done
