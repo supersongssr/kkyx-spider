@@ -194,6 +194,10 @@ WP_SYNC_MAX_DELAY = config_data["wordpress"].get("sync_max_delay")
 WP_MAX_RETRIES = config_data["wordpress"].get("max_retries")
 WP_RETRY_BACKOFF_BASE = config_data["wordpress"].get("retry_backoff_base")
 
+# Output Engine (Markdown / Hugo export)
+MD_OUTPUT_DIR = config_data.get("output", {}).get("md_dir", ".data/hugo/posts")
+JUMP_BASE_URL = config_data.get("output", {}).get("jump_base_url", "")
+
 # Crawl Status Codes
 CRAWL_STATUS_PENDING = 0
 CRAWL_STATUS_COMPLETED = 1

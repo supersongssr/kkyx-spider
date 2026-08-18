@@ -1,0 +1,309 @@
+#!/bin/sh
+# =============================================================================
+# KKYX RESOURCE ACQUISITION ENGINE - TUI 管理菜单 (plans/run-menu.md)
+#
+# 这是整个项目的总入口（软件的"窗口和菜单"），每个菜单项都对应一个
+# 独立且唯一的 CLI 命令，可脱离菜单单独执行：
+#
+#   bash init.sh                      # 初始化环境 (uv / 依赖 / Playwright / 凭据)
+#   uv run python3 cli.py run         # 自动化运行全流程
+#   uv run python3 cli.py index       # 单进程: 索引采集
+#   uv run python3 cli.py post        # 单进程: 详情采集
+#   uv run python3 cli.py md          # 单操作: Markdown 输出
+#   uv run python3 cli.py wp          # 单操作: WordPress 输出
+#   uv run python3 cli.py history     # 查看自动运行历史
+#   uv run python3 cli.py status      # 数据库状态统计
+#   uv run python3 cli.py web         # Web 监控控制台
+#   uv run python3 cli.py clean       # 清理缓存与截图
+#
+# 菜单交互: ↑/↓ 或 j/k 移动高亮，Enter 执行，数字键 1-9 快速执行，q 退出。
+# 非 TTY 环境（管道/CI）自动回退为数字编号输入模式。支持 ./run <序号> 直达。
+#
+# 本脚本严格遵循 POSIX sh（#!/bin/sh），可在 dash/bash 下运行。
+# =============================================================================
+
+# Always run from the project root regardless of where this script is invoked.
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$PROJECT_ROOT"
+
+# ----------------------------------------------------------------------------
+# Terminal colors
+# ----------------------------------------------------------------------------
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+INV='\033[7m'
+NC='\033[0m'
+
+# ----------------------------------------------------------------------------
+# Menu definition: labels 与 commands 一一对应（不能包含换行）
+# ----------------------------------------------------------------------------
+MENU_LABELS="🚀 初始化环境 (init: uv/依赖/Playwright/凭据)
+🔄 自动化运行全流程 (run: 登录+索引+详情+WP同步)
+📋 索引采集 · 单进程 (index)
+📄 详情采集 · 单进程 (post)
+📝 Markdown 输出 · 单操作 (md)
+🌐 WordPress 输出 · 单操作 (wp)
+📜 查看自动运行历史 (history)
+📊 本地数据库状态统计 (status)
+🖥️  Web 监控控制台 (web)
+🧹 清理缓存与调试截图 (clean)
+❌ 退出"
+
+MENU_CMDS="bash init.sh
+uv run python3 cli.py run
+uv run python3 cli.py index
+uv run python3 cli.py post
+uv run python3 cli.py md
+uv run python3 cli.py wp
+uv run python3 cli.py history
+uv run python3 cli.py status
+uv run python3 cli.py web
+uv run python3 cli.py clean
+__quit__"
+
+# ----------------------------------------------------------------------------
+# Small helpers (POSIX sh: no arrays, use newline-separated lists)
+# ----------------------------------------------------------------------------
+line_count() {
+    printf '%s\n' "$1" | wc -l | tr -d ' '
+}
+
+get_line() {
+    # $1 = list, $2 = index (0-based)
+    _i=0
+    printf '%s\n' "$1" | while IFS= read -r _line; do
+        if [ "$_i" = "$2" ]; then
+            printf '%s' "$_line"
+            break
+        fi
+        _i=$((_i + 1))
+    done
+}
+
+MENU_N=$(line_count "$MENU_LABELS")
+
+# ----------------------------------------------------------------------------
+# TTY raw-mode helpers (keep ISIG so Ctrl-C still works)
+# ----------------------------------------------------------------------------
+SAVED_TTY=""
+tty_raw() {
+    SAVED_TTY=$(stty -g 2>/dev/null) || return 1
+    # -icanon: 即时读取; -echo: 不回显; -icrnl: 保留回车为 \r 便于识别;
+    # 保留 ISIG， Ctrl-C 仍可触发信号退出。
+    stty -icanon -echo -icrnl 2>/dev/null || return 1
+}
+
+tty_restore() {
+    if [ -n "$SAVED_TTY" ]; then
+        stty "$SAVED_TTY" 2>/dev/null
+        SAVED_TTY=""
+    fi
+}
+
+# Read a single keypress into $KEY. Recognizes arrows / Enter / printable chars.
+read_key() {
+    KEY=$(dd bs=1 count=1 2>/dev/null)
+    [ -z "$KEY" ] && { KEY="EOF"; return; }
+    _esc=$(printf '\033')
+    if [ "$KEY" = "$_esc" ]; then
+        _seq2=$(dd bs=1 count=1 2>/dev/null)
+        if [ "$_seq2" = "[" ]; then
+            _seq3=$(dd bs=1 count=1 2>/dev/null)
+            case "$_seq3" in
+                A) KEY="UP" ;;
+                B) KEY="DOWN" ;;
+                *) KEY="OTHER" ;;
+            esac
+        else
+            KEY="ESC"
+        fi
+        return
+    fi
+    _cr=$(printf '\r')
+    if [ "$KEY" = "$_cr" ]; then
+        KEY="ENTER"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Menu rendering
+# ----------------------------------------------------------------------------
+draw_menu() {
+    _sel=$1
+    printf '\033[H\033[2J'
+    printf "${CYAN}${BOLD}"
+    printf "==================================================\n"
+    printf "     KKYX RESOURCE ACQUISITION ENGINE MANAGER      \n"
+    printf "==================================================\n"
+    printf "${NC}"
+    printf "\n"
+
+    _i=0
+    while [ "$_i" -lt "$MENU_N" ]; do
+        _label=$(get_line "$MENU_LABELS" "$_i")
+        _n=$((_i + 1))
+        if [ "$_i" = "$_sel" ]; then
+            printf "  ${INV}${BOLD} %2d │ %s ${NC}\n" "$_n" "$_label"
+        else
+            printf "   %2d │ %s\n" "$_n" "$_label"
+        fi
+        _i=$((_i + 1))
+    done
+
+    printf "\n"
+    printf "${DIM}  ↑/↓ 或 j/k 移动 · Enter 执行 · 1-9 快速执行 · q 退出${NC}\n"
+    printf "${CYAN}==================================================${NC}\n"
+}
+
+# ----------------------------------------------------------------------------
+# Command execution
+# ----------------------------------------------------------------------------
+run_item() {
+    _idx=$1
+    _cmd=$(get_line "$MENU_CMDS" "$_idx")
+
+    if [ "$_cmd" = "__quit__" ]; then
+        return 2
+    fi
+
+    printf '\033[H\033[2J'
+    printf "${BOLD}>>> 执行: %s${NC}\n" "$_cmd"
+    printf "${DIM}--------------------------------------------------${NC}\n"
+
+    tty_restore
+    sh -c "$_cmd"
+    _rc=$?
+    tty_raw 2>/dev/null
+
+    printf "\n${DIM}--------------------------------------------------${NC}\n"
+    if [ "$_rc" -eq 0 ]; then
+        printf "${GREEN}[✔] 命令执行完成 (退出码 0)${NC}\n"
+    else
+        printf "${RED}[✘] 命令执行失败 (退出码 $_rc)${NC}\n"
+    fi
+    printf "${YELLOW}按 Enter 返回菜单...${NC} "
+    _junk=$(dd bs=1 count=1 2>/dev/null)
+    return 0
+}
+
+# ----------------------------------------------------------------------------
+# Cleanup on exit / signals
+# ----------------------------------------------------------------------------
+cleanup() {
+    tty_restore
+    printf '\n'
+    printf "${GREEN}感谢使用，再见！${NC}\n"
+    exit 0
+}
+trap cleanup INT TERM
+
+# ----------------------------------------------------------------------------
+# Direct access mode: ./run <序号>
+# ----------------------------------------------------------------------------
+if [ -n "$1" ]; then
+    if printf '%s' "$1" | grep -qE '^[0-9]+$' && [ "$1" -ge 1 ] && [ "$1" -le "$MENU_N" ]; then
+        idx=$(($1 - 1))
+        cmd=$(get_line "$MENU_CMDS" "$idx")
+        if [ "$cmd" = "__quit__" ]; then
+            exit 0
+        fi
+        exec sh -c "$cmd"
+    fi
+    echo "用法: ./run [菜单序号 1-$MENU_N]" >&2
+    exit 1
+fi
+
+# ----------------------------------------------------------------------------
+# Main loop: TUI when interactive TTY, numeric fallback otherwise
+# ----------------------------------------------------------------------------
+sel=0
+
+if [ -t 0 ] && tty_raw 2>/dev/null; then
+    # --- Arrow-key TUI mode ---
+    while :; do
+        draw_menu "$sel"
+        read_key
+        case "$KEY" in
+            UP)
+                sel=$(((sel + MENU_N - 1) % MENU_N))
+                ;;
+            DOWN)
+                sel=$(((sel + 1) % MENU_N))
+                ;;
+            ENTER)
+                run_item "$sel"
+                [ "$?" -eq 2 ] && cleanup
+                ;;
+            ESC|EOF)
+                cleanup
+                ;;
+            q|Q)
+                cleanup
+                ;;
+            j|J)
+                sel=$(((sel + 1) % MENU_N))
+                ;;
+            k|K)
+                sel=$(((sel + MENU_N - 1) % MENU_N))
+                ;;
+            1|2|3|4|5|6|7|8|9)
+                if [ "$KEY" -lt "$MENU_N" ]; then
+                    run_item $(($KEY - 1))
+                    [ "$?" -eq 2 ] && cleanup
+                fi
+                ;;
+        esac
+    done
+else
+    # --- Numeric fallback (non-TTY / raw mode unavailable) ---
+    while :; do
+        printf "${CYAN}${BOLD}"
+        printf "==================================================\n"
+        printf "     KKYX RESOURCE ACQUISITION ENGINE MANAGER      \n"
+        printf "==================================================\n"
+        printf "${NC}\n"
+        printf "%s\n" "${BOLD}请选择操作:${NC}"
+
+        i=0
+        while [ "$i" -lt "$MENU_N" ]; do
+            label=$(get_line "$MENU_LABELS" "$i")
+            n=$((i + 1))
+            printf "  ${GREEN}%2d.${NC} %s\n" "$n" "$label"
+            i=$((i + 1))
+        done
+
+        printf "请输入选项标号 [1-%s] (q 退出): " "$MENU_N"
+        read -r choice || exit 0
+
+        case "$choice" in
+            q|Q) exit 0 ;;
+            "") continue ;;
+        esac
+
+        if ! printf '%s' "$choice" | grep -qE '^[0-9]+$'; then
+            printf "${RED}[!] 无效输入，请输入 1-%s 的数字。${NC}\n" "$MENU_N"
+            continue
+        fi
+
+        if [ "$choice" -lt 1 ] || [ "$choice" -gt "$MENU_N" ]; then
+            printf "${RED}[!] 选项超出范围，请输入 1-%s 的数字。${NC}\n" "$MENU_N"
+            continue
+        fi
+
+        cmd=$(get_line "$MENU_CMDS" "$((choice - 1))")
+        if [ "$cmd" = "__quit__" ]; then
+            printf "${GREEN}感谢使用，再见！${NC}\n"
+            exit 0
+        fi
+
+        printf "${DIM}>>> 执行: %s${NC}\n" "$cmd"
+        sh -c "$cmd"
+        printf "\n${DIM}（命令输出保留在上方；重新运行 ./run 回到菜单）${NC}\n"
+        exit $?
+    done
+fi

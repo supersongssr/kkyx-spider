@@ -88,6 +88,30 @@ class DBManager:
             );
             """)
             
+            # 5. run_history table (automated run history for the run menu)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS run_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command TEXT NOT NULL,            -- CLI command name (run/index/post/md/wp)
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                duration_sec REAL,
+                status TEXT DEFAULT 'running',   -- running/success/failed/interrupted
+                summary TEXT                     -- human readable summary
+            );
+            """)
+
+            # 6. md_export_log table (track games already exported as Markdown)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS md_export_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER UNIQUE,
+                file_path TEXT NOT NULL,
+                exported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            );
+            """)
+            
             conn.commit()
         logger.info("Database initialization completed successfully.")
 
@@ -296,5 +320,107 @@ class DBManager:
             WHERE g.crawl_status = ? AND l.id IS NULL
             LIMIT ?;
             """, (config.CRAWL_STATUS_COMPLETED, limit))
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+
+    # ==========================================================
+    # Run History Table Operations (automated run history)
+    # ==========================================================
+    def start_run_history(self, command):
+        """Insert a running record and return its id."""
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO run_history (command, started_at, status) VALUES (?, ?, 'running');",
+                (command, datetime.now().isoformat(timespec="seconds"))
+            )
+            conn.commit()
+            return cur.lastrowid
+
+    def finish_run_history(self, run_id, status, summary=""):
+        """Close a running record with duration, status and summary."""
+        finished_at = datetime.now().isoformat(timespec="seconds")
+        duration_sec = None
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT started_at FROM run_history WHERE id = ?;", (run_id,))
+            row = cur.fetchone()
+            if row:
+                try:
+                    started = datetime.fromisoformat(row[0])
+                    duration_sec = round((datetime.now() - started).total_seconds(), 1)
+                except (ValueError, TypeError):
+                    duration_sec = None
+            cur.execute(
+                "UPDATE run_history SET finished_at = ?, duration_sec = ?, status = ?, summary = ? WHERE id = ?;",
+                (finished_at, duration_sec, status, summary, run_id)
+            )
+            conn.commit()
+
+    def get_run_history(self, limit=20):
+        """Retrieve the most recent run history records (newest first)."""
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM run_history ORDER BY id DESC LIMIT ?;", (limit,))
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+
+    def get_status_summary(self):
+        """Snapshot of table counts and game crawl status distribution (for run summary / status view)."""
+        summary = {"tables": {}, "statuses": {}}
+        status_names = {
+            config.CRAWL_STATUS_PENDING: "pending",
+            config.CRAWL_STATUS_COMPLETED: "completed",
+            config.CRAWL_STATUS_NEEDS_UPDATE: "needs_update",
+            config.CRAWL_STATUS_DEAD_LETTER: "dead_letter",
+        }
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            tables = [t[0] for t in cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+            ).fetchall()]
+            for t in tables:
+                count = cur.execute(f"SELECT count(*) FROM {t};").fetchone()[0]
+                summary["tables"][t] = count
+            if "games" in tables:
+                for code, name in status_names.items():
+                    summary["statuses"][name] = cur.execute(
+                        "SELECT count(*) FROM games WHERE crawl_status = ?;", (code,)
+                    ).fetchone()[0]
+        return summary
+
+    # ==========================================================
+    # MD Export Log Table Operations
+    # ==========================================================
+    def get_md_export_log(self, game_id):
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM md_export_log WHERE game_id = ?;", (game_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def save_md_export_log(self, game_id, file_path):
+        with self.get_connection() as conn:
+            conn.execute("""
+            INSERT INTO md_export_log (game_id, file_path)
+            VALUES (?, ?)
+            ON CONFLICT(game_id) DO UPDATE SET file_path=excluded.file_path, exported_at=CURRENT_TIMESTAMP;
+            """, (game_id, file_path))
+            conn.commit()
+
+    def get_unexported_completed_games(self, limit=None):
+        """Retrieve completed games not yet exported as Markdown (or whose file is gone)."""
+        query = """
+        SELECT g.* FROM games g
+        LEFT JOIN md_export_log e ON g.id = e.game_id
+        WHERE g.crawl_status = ? AND (e.id IS NULL OR e.file_path IS NULL)
+        """
+        params = [config.CRAWL_STATUS_COMPLETED]
+        if limit:
+            query += " LIMIT ?;"
+            params.append(limit)
+        with self.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, params)
             rows = cur.fetchall()
             return [dict(r) for r in rows]

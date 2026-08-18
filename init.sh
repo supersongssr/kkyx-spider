@@ -295,6 +295,7 @@ fi
 # ------------------------------------------------------------------------------
 # Step 7: Fix Execution Permissions
 # ------------------------------------------------------------------------------
+chmod +x run 2>/dev/null || true
 chmod +x run.sh 2>/dev/null || true
 chmod +x init.sh 2>/dev/null || true
 chmod +x scripts/verify_config.sh 2>/dev/null || true
@@ -306,6 +307,7 @@ echo -e "\n${GREEN}${BOLD}======================================================
 echo "    [✔] KKYX RESOURCE ACQUISITION ENGINE 初始化完成!"
 echo -e "==========================================================${NC}"
 echo -e "\n接下来您可以运行以下命令启动管理台:"
-echo -e "  ${CYAN}./run.sh${NC}\n"
+echo -e "  ${CYAN}./run${NC}          # TUI 管理菜单"
+echo -e "  ${CYAN}./run 2${NC}        # 直达菜单项 2 (自动化全流程)\n"
 
 exit 0
